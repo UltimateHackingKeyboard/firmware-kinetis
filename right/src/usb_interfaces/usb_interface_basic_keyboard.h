@@ -19,7 +19,9 @@
     #define USB_BASIC_KEYBOARD_INTERRUPT_IN_PACKET_SIZE 8
     #define USB_BASIC_KEYBOARD_INTERRUPT_IN_INTERVAL 1
 
-    #define USB_BASIC_KEYBOARD_REPORT_LENGTH 8
+    #define USB_BASIC_KEYBOARD_IS_IN_BITFIELD(scancode) (((scancode) >= USB_BASIC_KEYBOARD_MIN_BITFIELD_SCANCODE) && ((scancode) <= USB_BASIC_KEYBOARD_MAX_BITFIELD_SCANCODE))
+    #define USB_BASIC_KEYBOARD_IS_IN_MODIFIERS(scancode) (((scancode) >= USB_BASIC_KEYBOARD_MIN_MODIFIERS_SCANCODE) && ((scancode) <= USB_BASIC_KEYBOARD_MAX_MODIFIERS_SCANCODE)) 
+
 
 // Typedefs:
 
@@ -32,13 +34,17 @@
     typedef struct {
         uint8_t modifiers;
         uint8_t reserved; // Always must be 0
-        uint8_t scancodes[USB_BASIC_KEYBOARD_MAX_KEYS];
+        union {
+            uint8_t scancodes[USB_BOOT_KEYBOARD_MAX_KEYS];
+            uint8_t bitfield[USB_BASIC_KEYBOARD_BITFIELD_LENGTH];
+        };
     } ATTR_PACKED usb_basic_keyboard_report_t;
 
 // Variables:
 
     extern uint32_t UsbBasicKeyboardActionCounter;
     extern usb_basic_keyboard_report_t* ActiveUsbBasicKeyboardReport;
+    extern uint8_t usbBasicKeyboardProtocol;
 
 // Functions:
 
@@ -50,5 +56,21 @@
     usb_status_t UsbBasicKeyboardAction(void);
     usb_status_t UsbBasicKeyboardCheckIdleElapsed();
     usb_status_t UsbBasicKeyboardCheckReportReady();
+
+    static inline bool test_bit(int nr, const void *addr)
+    {
+        const uint8_t *p = (const uint8_t *)addr;
+        return ((1UL << (nr & 7)) & (p[nr >> 3])) != 0;
+    }
+    static inline void set_bit(int nr, void *addr)
+    {
+        uint8_t *p = (uint8_t *)addr;
+        p[nr >> 3] |= (1UL << (nr & 7));
+    }
+    static inline void clear_bit(int nr, void *addr)
+    {
+        uint8_t *p = (uint8_t *)addr;
+        p[nr >> 3] &= ~(1UL << (nr & 7));
+    }
 
 #endif

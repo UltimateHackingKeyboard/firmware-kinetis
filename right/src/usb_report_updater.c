@@ -2,6 +2,8 @@
 #include "key_action.h"
 #include "led_display.h"
 #include "layer.h"
+#include "usb_interfaces/usb_interface_basic_keyboard.h"
+#include "usb_interfaces/usb_interface_system_keyboard.h"
 #include "usb_interfaces/usb_interface_mouse.h"
 #include "keymap.h"
 #include "peripherals/test_led.h"
@@ -155,10 +157,23 @@ static void applyKeystrokePrimary(key_state_t *keyState, key_action_t *action)
         if (!stickyModifiersChanged || KeyState_ActivatedEarlier(keyState)) {
             switch (action->keystroke.keystrokeType) {
                 case KeystrokeType_Basic:
-                    if (basicScancodeIndex >= USB_BASIC_KEYBOARD_MAX_KEYS || action->keystroke.scancode == 0) {
-                        break;
+                    if (action->keystroke.scancode != 0) {
+                        if (usbBasicKeyboardProtocol==0) {
+                            if (basicScancodeIndex >=  USB_BOOT_KEYBOARD_MAX_KEYS) {
+                                // Rollover error
+                                if (ActiveUsbBasicKeyboardReport->scancodes[0] != HID_KEYBOARD_SC_ERROR_ROLLOVER) {
+                                    memset(ActiveUsbBasicKeyboardReport->scancodes, HID_KEYBOARD_SC_ERROR_ROLLOVER, USB_BOOT_KEYBOARD_MAX_KEYS);
+                                }
+                            } else {
+                                ActiveUsbBasicKeyboardReport->scancodes[basicScancodeIndex++] = action->keystroke.scancode;
+                            }
+                        } else if (USB_BASIC_KEYBOARD_IS_IN_BITFIELD(action->keystroke.scancode)) {
+                            set_bit(action->keystroke.scancode - USB_BASIC_KEYBOARD_MIN_BITFIELD_SCANCODE, ActiveUsbBasicKeyboardReport->bitfield);                            
+                        } else if (USB_BASIC_KEYBOARD_IS_IN_MODIFIERS(action->keystroke.scancode)) {
+                            // TODO: Does this Intreact with stickyMods?
+                            set_bit(action->keystroke.scancode - USB_BASIC_KEYBOARD_MIN_MODIFIERS_SCANCODE, &ActiveUsbBasicKeyboardReport->modifiers);
+                        }
                     }
-                    ActiveUsbBasicKeyboardReport->scancodes[basicScancodeIndex++] = action->keystroke.scancode;
                     break;
                 case KeystrokeType_Media:
                     if (mediaScancodeIndex >= USB_MEDIA_KEYBOARD_MAX_KEYS) {
@@ -167,10 +182,9 @@ static void applyKeystrokePrimary(key_state_t *keyState, key_action_t *action)
                     ActiveUsbMediaKeyboardReport->scancodes[mediaScancodeIndex++] = action->keystroke.scancode;
                     break;
                 case KeystrokeType_System:
-                    if (systemScancodeIndex >= USB_SYSTEM_KEYBOARD_MAX_KEYS) {
-                        break;
+                    if (USB_SYSTEM_KEYBOARD_IS_IN_BITFIELD(action->keystroke.scancode)) {
+                        set_bit(action->keystroke.scancode - USB_SYSTEM_KEYBOARD_MIN_BITFIELD_SCANCODE, ActiveUsbSystemKeyboardReport->bitfield);
                     }
-                    ActiveUsbSystemKeyboardReport->scancodes[systemScancodeIndex++] = action->keystroke.scancode;
                     break;
             }
         }
